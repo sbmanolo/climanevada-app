@@ -44,7 +44,6 @@ class CnStations(models.Model):
     station_variables_id = models.CharField(max_length=255, blank=True, null=True)
     geom_4326 = gis_models.PointField(srid=4326, blank=True, null=True)
     geom_25830 = gis_models.GeometryField(srid=25830, blank=True, null=True)
-    #geom_4326 = models.GeometryField(srid=25830, blank=True, null=True)
     station_type = models.CharField(max_length=20, blank=True, null=True)
 
     class Meta:
@@ -80,7 +79,6 @@ class CnDatos(models.Model):
     value = models.FloatField(blank=True, null=True)
     validation_id = models.IntegerField()
     station_id = models.IntegerField()
-    #ref = models.AutoField(primary_key=True)
 
     class Meta:
         managed = False
