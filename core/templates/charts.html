@@ -1,0 +1,306 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    {% load static %}
+    {% load crispy_forms_tags %}
+    {% load leaflet_tags %}
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+    {% comment %} {% leaflet_css  %} {% endcomment %}
+    {% leaflet_css plugins="ALL" %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.1.0/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.1.0/dist/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ion-rangeslider/2.3.1/css/ion.rangeSlider.min.css"/>
+{% endblock %}
+
+{% block title %} Estaciones meteorológicas {% endblock %}
+{% block page_title %}Formulario metadatos{% endblock %}
+
+{% block style %}
+    #id_location-map { 
+        width:80%;
+        min-height:80vh;
+        height: auto; 
+    }
+
+    .leaflet-popup-tip-container {
+        left:0%; 
+    }
+
+    .page-content {
+        margin-bottom:20px !important;
+    }
+{% endblock %}
+
+{% block scripts %}
+    {% leaflet_js plugins="ALL" %}
+    <script src="https://unpkg.com/leaflet.markercluster@1.1.0/dist/leaflet.markercluster.js"></script>
+    {{ form.media }}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ion-rangeslider/2.3.1/js/ion.rangeSlider.min.js"></script>
+
+{% endblock%}
+
+{% block content %}
+    <form class="form" id="station_data_form" data-variables-url="{% url 'ajax_load_variables' %}" method="GET" action="/stations/" enctype="multipart/form-data">
+        <div id="form-fields-div" class="">
+            {% comment %} {% csrf_token %} {% endcomment %}
+            {% crispy form %}
+        </div>
+    </form>
+    <div class="col-lg-3 col-md-4" id="jmessage" role="alert"></div>
+    {% if n_items < 262%} <div class="row"><div class="col-lg-3 col-md-4">{{n_items}} station{% if n_items > 1%}s{%endif%} matches the query.</div></div> {%endif%}
+
+    <!--Añadir capas y popups al Mapa Leaflet del formulario-->
+    <script type = "text/javascript">
+
+        const n_items = {{n_items}};
+
+        LeafletGeometryField = L.GeometryField.extend({
+            addTo: function (map) {
+                
+                L.GeometryField.prototype.addTo.call(this, map);
+
+                
+
+                L.tileLayer('//{s}.tile.osm.org/{z}/{x}/{y}.png').addTo(map);
+                var data = {{estaciones|safe}};
+
+                function forEachFeature(feature, layer) {
+
+                    /*$('#id_station_name option[value=' + feature.properties.pk + ']').attr('selected', true);*/
+
+                    var popupContent = (
+                        (
+                            feature.properties.station_name !== "" ?
+                                "<b>Station:</b> " + feature.properties.station_name + "</br>" : 
+                            ""
+                        ) +
+                        (
+                            feature.properties.station_code !== "" ?
+                                "<b>Station ID:</b> " + feature.properties.station_code + "</br>" : 
+                            ""
+                        ) +
+                        (
+                            feature.properties.status !== "" ?
+                                "<b>Status:</b> " + feature.properties.status + "</br>" : 
+                            ""
+                        ) +
+                        (
+                            feature.properties.elev !== "" ?
+                                "<b>Elevation:</b> " + feature.properties.elev + "</br>" : 
+                            ""
+                        ) +
+                        (
+                            feature.properties.station_variables_id !== "" ?
+                                "<b>Variables:</b> " + feature.properties.station_variables_id + "</br>" : 
+                            ""
+                        ) +
+                        (
+                            feature.properties.network_id !== "" ?
+                                "<b>Network:</b> " + feature.properties.network_id + "</br>" : 
+                            ""
+                        )
+                    );
+
+                    layer.bindPopup(popupContent);
+                    //layer.bindPopup(feature.properties.station_name);
+                }
+
+                var climaCluster= L.markerClusterGroup();
+                var theLayer = L.geoJson(data, { onEachFeature: forEachFeature });
+                climaCluster.addLayer( theLayer );
+                map.addLayer(climaCluster);
+
+                L.Control.textbox = L.Control.extend({
+                        onAdd: function(map) {
+                            
+                        var text = L.DomUtil.create('div');
+                        text.innerHTML = "<button type='button' class='btn-info Hide-form'>Hide Form</button><button type='button' class='btn-info Show-form'>Show Form</button>"
+                        return text;
+                        },
+                        onRemove: function(map) {
+                        }
+                    });
+                    L.control.textbox = function(opts) { return new L.Control.textbox(opts);}
+                    L.control.textbox({ position: 'bottomleft' }).addTo(map);
+
+                $('.Show-form').click(function() {
+                    $('#map-div').removeClass("col-md-12");
+                    $('#map-div').addClass("col-md-9");
+                    $('#map-query').show(500);
+                    $('.Show-form').hide(0);
+                    $('.Hide-form').show(0);
+                    map.invalidateSize()
+                });
+                $('.Hide-form').click(function() {
+                    $('#map-query').hide(500);
+                    setTimeout(function(){
+                        $('#map-div').removeClass("col-md-9");
+                        $('#map-div').addClass("col-md-12");
+                        $('.Show-form').show(0);
+                        $('.Hide-form').hide(0);
+                        map.invalidateSize()
+                    },520); 
+                });
+                $('.toggle').click(function() {
+                    $('#map-query').toggle('slow');
+                });             
+            }
+        });
+
+    </script>
+
+    <!--Inicializar el DatePicker para el rango de fechas y el RangeSlider para la altitud-->
+    <script type="text/javascript">
+        $(".js-range-slider").ionRangeSlider();
+        $('input[name="stations-date-range"]').daterangepicker();
+    </script>
+
+    <!--Habilitamos el botton de descarga cuando se cumplen los requisitos para realizar una (Estaciones, rango temporal y variables)-->
+    <script type="text/javascript">
+        function enableDownload() {
+            $('input[name="download"]').attr('disabled', true);
+            $(document).ready(function() {
+                var date_range_value = $("#id_date_range").val();
+                var variable_value = $("#id_variables").val();
+                var station_name_values = $("#id_station_name").val();
+                var selected_stations = ({{n_items}});
+                var date_value = $('input[name="date_range"]').val();
+
+                if(selected_stations != 262 || station_name_values != '') {
+                    if(variable_value != '') {
+                        if(date_range_value != '' && date_value != '') {
+                        //var validateTime=/^\d{4}-(0[1-9]|1[0-2])-[0-3]\d\s([0-1][0-9]|2[0-3]):[0-5]\d:[0-5]\d$/;
+                        var validateTime=/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|1[0-9]|2[0-9]|3[0-1])\s([0-1][0-9]|2[0-3]):[0-5]\d:[0-5]\d$/;
+                        var dates = date_range_value.split(" - ");
+                            if(dates[0].match(validateTime) && dates[1].match(validateTime)){
+                                $('input[name="download"]').attr('disabled', false);
+                                $('#disabled-download-info').html("");
+                            } else {
+                                $('input[name="download"]').attr('disabled', true);
+                                $('#disabled-download-info').html("Invalid date format. It mus be YYYY-MM-DD HH:MM:ss - YYYY-MM-DD HH:MM:ss");
+                            }
+                        } else {
+                            var msg = "Falta la fecha";
+                            $('input[name="download"]').attr('disabled', true);
+                            $('#disabled-download-info').html("You have not selected any date range");
+                        }
+                    } else {
+                        $('input[name="download"]').attr('disabled', true);
+                        $('#disabled-download-info').html("You have not selected any variable.");
+                    }
+                } else {
+                    $('input[name="download"]').attr('disabled', true);
+                    $('#disabled-download-info').html("Select at least one station, one parameter and a valid time range.");
+                };
+            });
+        };
+
+        $('#id_date_range').on('apply.daterangepicker', enableDownload);
+        $('#id_date_range').on('cancel.daterangepicker', enableDownload);
+        $('input[name="date_range"').bind('change paste keyup', enableDownload);
+        $('select[name="variables"').bind('change paste keyup', enableDownload);
+        $('select[name="station_name"').bind('change paste keyup', enableDownload);
+        /*$(document).click(enableDownload);*/
+        $(document).ready(enableDownload);
+    </script>
+    
+    {% comment %} <script type="text/javascript">
+    
+        /*$("station_data_form :input").change(function() {*/
+        $(document).click(function() {
+
+            $('.updateButton').on('click', function() {
+                var aj_stations = $('#id_station_name').val();
+                var aj_status = $('#id_status').val();
+                console.log(aj_stations);
+                console.log(aj_status);
+                req = $.ajax({
+                    url : '/stations',
+                    type : 'GET',
+                    data : { station_name : aj_stations, status : aj_status, }
+                });
+                /*req.done(function(data) {
+                    console.log(data)
+                    //$('#memberSection'+member_id).fadeOut(1000).fadeIn(1000);
+                    //$('#memberNumber'+member_id).text(data.member_num);
+                });*/
+            });
+            var url = "/stations";
+            var estaciones = {{estaciones|safe}}
+            var aj_stations = $('#id_station_name').val();
+            var aj_status = $('#id_status').val();
+            console.log(estaciones);
+            console.log("HEEEEE")
+            $.ajax({
+                url: url,
+                data: {
+                'data': estaciones, station_name : aj_stations, status : aj_status,
+                },
+                success: function (data) {
+                    console.log(data);
+                $("#id_location").html(data); 
+                }
+            });
+        });
+    </script> {% endcomment %}
+
+    {% if n_items < 262 %}
+        <script type="text/javascript">
+            $(document).ready(function() {
+                var station_ids = {{station_ids}};
+                $("#id_station_name").val(station_ids).trigger('change');
+            });
+        </script>
+    {% endif %}
+
+    <!--Ajax para cambiar dinamicamente las variables seleccionables en función de las estaciones seleccionadas-->
+    <script>
+        $(document).ready(function() {
+            var url = $("#station_data_form").attr("data-variables-url");
+            var stationId = $("#id_station_name").val();
+            $.ajax({
+                url: url,
+                data: {
+                'station_name': stationId
+                },
+                success: function (data) {
+                $("#id_variables").html(data); 
+                }
+            });
+            $("#id_variables")
+                .find('option')
+                .remove()
+                .end(); 
+        });
+
+        $("#id_station_name").change(function () {
+            var url = $("#station_data_form").attr("data-variables-url");
+            var stationId = $(this).val();
+
+            $("#id_station_name option[value='']").remove();
+            
+            $("#id_variables")
+                .find('option')
+                .remove()
+                .end();
+            $.ajax({
+                url: url,
+                data: {
+                'station_name': stationId
+                },
+                success: function (data) {
+                $("#id_variables").html(data); 
+                }
+            });
+
+        });
+
+        $("#id_variables").change(function () {
+            $("#id_variables option[value='']").remove();  
+        });
+
+
+    </script>
+
+{% endblock %}

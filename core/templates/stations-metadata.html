@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load leaflet_tags %}
+
+{% block head %}
+
+    {% comment %} <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.21/css/jquery.dataTables.css"> {% endcomment %}
+
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.21/css/dataTables.bootstrap4.min.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/responsive/2.2.5/css/responsive.bootstrap4.min.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/fixedheader/3.1.7/css/fixedHeader.dataTables.min.css">
+    
+{% endblock %}
+
+{% block title %} Stations Metadata {% endblock %}
+{% block page_title %} Stations Metadata {% endblock %}
+
+{% block style %}
+
+.search-box-dt {
+    font-size: 14px;
+}
+
+{% endblock %}
+
+{% block scripts %}
+
+{% endblock%}
+
+{% block content %}
+<div class="container-fluid" style="padding:50px 0px;">
+        <table id="variable-table" width="100%" class="table table-striped table-bordered">
+            <thead>
+                <tr>
+                    <th width="30%">Station name</th>
+                    <th style="width:10px !important;" width="10%">Station ID</th>
+                    <th >Station code</th>
+                    <th >Municipality</th>
+                    <th>Status</th>
+                    <th>Elevation</th>
+                    <th>Variables</th>
+                </tr>
+            </thead>
+            <tfoot>
+                <tr>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                </tr>
+            </tfoot>
+        </table>
+</div>
+
+{% endblock %}
+{% block extrajs %}
+
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.js"></script>
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.21/js/dataTables.bootstrap4.min.js"></script>
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/responsive/2.2.5/js/dataTables.responsive.min.js"></script>
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/responsive/2.2.5/js/responsive.bootstrap4.min.js"></script>
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/fixedheader/3.1.7/js/dataTables.fixedHeader.min.js"></script>
+    
+    <script type="text/javascript">
+
+        var data = {{stations_list|safe}};
+
+        $(document).ready(function() {
+
+            $('#variable-table tfoot tr th').each( function () {
+                var title = $(this).text();
+                $(this).html( '<input type="text" class="search-box-dt" placeholder="Search '+title+'" />' );
+            } );
+
+            var table = $('#variable-table').DataTable( {
+                paging: true,
+                lengthChange: true,
+                searching: true,
+                fixedHeader: true,
+                ordering: true,
+                info: true,
+                autoWidth: true,
+                scrollX: "60vh",
+                /*deferRender: true,*/
+                scroller: true,
+                responsive: true,
+                buttons: [
+                    'excelHtml5'
+                ],
+                "bInfo": true,
+                "data" : data,
+                "columns": [
+                    { "data": "fields.station_name"},
+                    { "data": "pk"},
+                    { "data": "fields.station_code" },
+                    { "data": "fields.munic_name" },
+                    { "data": "fields.status" },
+                    { "data": "fields.elev" },
+                    { "data": "fields.station_variables_id" },
+                ]
+            } );
+
+            table.columns().every( function () {
+                var that = this;
+
+                $( 'input', this.footer() ).on( 'keyup change', function () {
+                    if ( that.search() !== this.value ) {
+                        that
+                            .search( this.value )
+                            .draw();
+                    }
+                } );
+            } );
+        } );
+    </script>
+
+{% endblock %}

@@ -1,0 +1,328 @@
+{% extends 'base.html' %}
+
+{% load static %}
+{% load crispy_forms_tags %}
+{% load leaflet_tags %}
+
+{% block head %}
+
+    {% leaflet_css plugins="ALL" %}
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.1.0/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.1.0/dist/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ion-rangeslider/2.3.1/css/ion.rangeSlider.min.css"/>
+    <link href="https://cdn.jsdelivr.net/gh/gitbrent/bootstrap4-toggle@3.6.1/css/bootstrap4-toggle.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intro.js/3.2.1/introjs.css" integrity="sha512-i+WzzATeaDcwcfi5CfLn63qBxrKqiQvDLC+IChU1zVlaPguPgJlddOR07nU28XOoIOno9WPmJ+3ccUInpmHxBg==" crossorigin="anonymous" />
+
+{% endblock %}
+
+{% block title %}Climanevada{% endblock %}
+{% block page_title %}Climanevada{% endblock %}
+
+{% block style %}
+
+{% endblock %}
+
+{% block content %}
+    <form class="form" id="stationsForm" method="GET" action="/stations/" enctype="multipart/form-data">
+        <div id="form-fields-div" class="form-fields">
+            {% crispy form %}
+        </div>
+    </form>
+
+{% endblock %}
+
+{% block extrajs %}
+
+    {% leaflet_js plugins="ALL" %}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ion-rangeslider/2.3.1/js/ion.rangeSlider.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/gitbrent/bootstrap4-toggle@3.6.1/js/bootstrap4-toggle.min.js"></script>
+    <script type="text/javascript" src="/static/js/leaflet/custom-icons.js"></script>        
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/intro.js/3.2.1/intro.min.js" integrity="sha512-iOr/b/615LMvxO8c+OWeMYfM5+KL/1gvjRtR8XIParS70gXVARiaRJWZN435d24F+RTPs9RVI1usPtLIfgtzGw==" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="/static/js/tutorial/app-tutorial.js"></script>    
+    <script type="text/javascript" src="/static/js/cookies.js"></script>    
+
+    <!-- Funcion Capwords-->
+    <script type="text/javascript">
+        function capWords(str){ 
+            var words = str.split(" "); 
+            for (var i=0 ; i < words.length ; i++){ 
+                var testwd = words[i]; 
+                var firLet = testwd.substr(0,1); 
+                var rest = testwd.substr(1, testwd.length -1) 
+                words[i] = firLet.toUpperCase() + rest 
+            } 
+        return words.join(" "); 
+        };
+    </script>
+
+    <!-- Añadir capas y markers al Mapa Leaflet del formulario, asi como funciones para recargar el mismo via AJAX -->
+
+    <script type = "text/javascript">
+
+        function select_station(station_id, station_name) {
+            var newOption = new Option(station_name, station_id, true, true);
+            $("#id_station_name").append(newOption).trigger('change');
+        };
+        
+        var mydict = {
+            1: "A",
+            2: "B",
+            3: "C",
+            6: "F"
+        };
+
+        var data = {{ stations|safe }};
+        var networks = {{ networks|safe }};
+        
+        var networks_dict = {}
+        for (var i = 0; i < networks.features.length; i++) {
+            networks_dict[networks.features[i].properties.pk] = networks.features[i].properties.network_name
+        }
+
+        LeafletGeometryField = L.GeometryField.extend({
+            addTo: function (map) {
+
+                var stations_ajax,
+                    variables,
+                    sensorsToggle,
+                    stationsToggle,
+                    theLayer;
+
+                function markerGranada() {
+                    var Granada = L.marker([37.1721694, -3.6011694], {icon: redIconLocation});
+                    Granada.setZIndexOffset(5).addTo(map).bindPopup("<h5>Granada city</h5>")
+                    Granada.on('mouseover', function (e) {this.openPopup();});
+                    Granada.on('mouseout', function (e) {this.closePopup();});
+                }
+
+                function forEachFeatureClosure(stations_ajax, min_altitude, max_altitude) {
+                    return function forEachFeature(feature, layer) {
+
+                        if (feature.properties.station_type == 'Sensor') {
+                            var icons = {'blue': blueIconSquare, 'green':greenIconSquare, 'gray':grayIconSquare}
+                        } else if (feature.properties.station_type == 'Station') {
+                            var icons = {'blue': blueIcon, 'green':greenIcon, 'gray':grayIcon}
+                        }
+
+                        layer.on('click', function(e) {
+                            if ($("#id_station_name").val().includes(feature.properties.pk)) {
+            
+                                $("#id_station_name option[value='" + feature.properties.pk + "']").remove();
+                                $("#id_station_name").trigger("change");
+                                layer.setIcon(icons['blue'])
+                            } else {
+                                if ( stations_ajax.results.some(code => code.id === feature.properties.pk) == false ) {
+                                    // pass
+                                } else {
+                                    layer.setIcon(icons['green'])
+                                    layer.setZIndexOffset(1000)
+                                    var munic_name = feature.properties.munic_name.toLowerCase();
+                                    var newOption = new Option(munic_name.replace(/\b\w/g, l => l.toUpperCase()) + ' (' + feature.properties.station_code +  ')', feature.properties.pk, true, true);
+                                    $("#id_station_name").append(newOption).trigger('change');
+                                };
+                            };
+                        });                        
+
+                        if ( stations_ajax.results.some(code => code.id === feature.properties.pk) == false ) {
+                            if ($("#id_station_name").val().includes(feature.properties.pk)) {
+                                $("#id_station_name option[value='" + feature.properties.pk + "']").remove();
+                            };
+                            layer.setIcon(icons['gray']);
+                            } else {
+                                if ($("#id_station_name").val().includes(feature.properties.pk)) {
+                                    layer.setIcon(icons['green']).setZIndexOffset(1000)
+                                } else {
+                                    layer.setIcon(icons['blue'])
+                                };                        
+                        };
+                        var popupContent = (
+                            "<b>Station Code:</b> " + feature.properties.station_code + "</br>" +
+                            "<b>Station Name:</b> " + feature.properties.station_name + "</br>" +
+                            "<b>Type:</b> " + feature.properties.station_type + "</br>" +
+                            "<b>Municipality:</b> " + feature.properties.munic_name + "</br>" +
+                            "<b>Elevation:</b> " + feature.properties.elev + "</br>" +
+                            "<b>Network:</b> " + networks_dict[feature.properties.cn_network_id] + "</br>"
+                        );
+                        layer.bindPopup(popupContent);
+                        layer.on('mouseover', function (e) {this.openPopup();});
+                        layer.on('mouseout', function (e) {this.closePopup();});
+                    };
+                };
+
+                $.ajax({
+                    type: "GET", 
+                    url: '/stations-leaflet-autocomplete/',
+                    data: {
+                        forward:  JSON.stringify({getall: true,}),
+                    },
+                    dataType: "json", 
+                    async: true,
+                    success: function(response){
+                            stations_ajax = response;
+                            theLayer = L.geoJson(data, { onEachFeature: forEachFeatureClosure(stations_ajax, min_altitude, max_altitude) });
+                            map.addLayer(theLayer);
+                            markerGranada()
+                    }
+                }); 
+
+                instance = $(".js-range-slider").data("ionRangeSlider");
+                var min_altitude = $(instance)[0].old_from;
+                var max_altitude = $(instance)[0].old_to;
+
+                function get_stations(async_mode) {
+
+                    instance = $(".js-range-slider").data("ionRangeSlider");
+                    var min_altitude = $(instance)[0].old_from;
+                    var max_altitude = $(instance)[0].old_to;
+
+                    stationsToggle = $('#stations-toggle').prop('checked');
+                    sensorsToggle = $('#sensors-toggle').prop('checked');
+
+                    var forward_data = {
+                        field: 'station_name',
+                        variables : $("#id_variables").val(),
+                        min_altitude : min_altitude,
+                        max_altitude : max_altitude,
+                        request_src: 'leaflet',
+                        station_type: [stationsToggle, sensorsToggle],
+                    }
+
+                    $.ajax({
+                        type: "GET", 
+                        url: '/stations-leaflet-autocomplete/',
+                        data: {
+                            forward:  JSON.stringify(forward_data),
+                        },
+                        dataType: "json", 
+                        async: async_mode,
+                        success: function(response){
+                                stations_ajax = response;
+                                theLayer.clearLayers();
+                                theLayer = L.geoJson(data, { onEachFeature: forEachFeatureClosure(stations_ajax, min_altitude, max_altitude) });
+                                map.addLayer(theLayer);
+                        }
+                    });
+                };
+
+                $("#div_id_variables").on('change', function() {get_stations(true);});
+                $("#div_id_station_name").on('change', function(e) {get_stations(true);});
+                $("#div_id_altitude").on('click', function() {get_stations(false);});
+                $("#stations-toggle").on('change', function() {get_stations(true);});
+                $("#sensors-toggle").on('change', function() {get_stations(true);});   
+   
+                L.Control.textbox = L.Control.extend({
+                        onAdd: function(map) {
+                        var text = L.DomUtil.create('div');
+                        text.innerHTML =    "<button type='button' class='btn btn-light Hide-form'>Hide Form</button>" +
+                                            "<button type='button' class='btn btn-info Show-form'>Show Form</button>"
+                        return text;
+                        },
+                        onRemove: function(map) {
+                        }
+                    });
+                    L.control.textbox = function(opts) { return new L.Control.textbox(opts);}
+                    L.control.textbox({ position: 'bottomleft' }).addTo(map);
+
+                L.Control.textbox = L.Control.extend({
+                        onAdd: function(map) {
+                        var text = L.DomUtil.create('div');
+                        text.innerHTML = "<div style='color:black; font-weight:bold' class='btn btn-warning disabled' disabled>Sierra Nevada. Granada, Spain</div>"
+                        return text;
+                        },
+                        onRemove: function(map) {
+                        }
+                    });
+                    L.control.textbox = function(opts) { return new L.Control.textbox(opts);}
+                    L.control.textbox({ position: 'bottomright' }).addTo(map);                
+
+                $('.Show-form').click(function() {
+                    $('#map-div').removeClass("col-md-12 col-lg-12").addClass("col-md-9 col-lg-9");
+                    $('#map-query').show(500);
+                    $('.Show-form').hide(0);
+                    $('.Hide-form').show(0);
+                    map.invalidateSize()
+                });
+                $('.Hide-form').click(function() {
+                    $('#map-query').hide(500);
+                    setTimeout(function(){
+                        $('#map-div').removeClass("col-md-9 col-lg-9").addClass("col-md-12 col-lg-12");
+                        $('.Show-form').show(0);
+                        $('.Hide-form').hide(0);
+                        map.invalidateSize()
+                    },520); 
+                });
+            }
+        });
+
+    </script>
+
+    <!--Inicializar el DatePicker para el rango de fechas y el RangeSlider para la altitud-->
+    <script type="text/javascript">
+        $(".js-range-slider").ionRangeSlider({ skin:"big",});
+        $('input[name="stations-date-range"]').daterangepicker();
+    </script>
+
+    <!--Habilitamos el botton de descarga cuando se cumplen los requisitos para realizar una (Estaciones, rango temporal y variables)-->
+    <script type="text/javascript">
+
+        function validateDate(date_range) {
+            if(date_range) {
+                var validateTime=/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|1[0-9]|2[0-9]|3[0-1])\s([0-1][0-9]|2[0-3]):[0-5]\d:[0-5]\d$/;
+                var dates = date_range.split(" - ");
+                if(dates[0].match(validateTime) && dates[1].match(validateTime)){
+                    return true
+                } else {
+                    return false
+                }
+            } else {
+                return false
+            }
+        };
+
+        function enableDownload() {
+
+            if ( $("#id_variables").val() != false && $("#id_station_name").val() != false && validateDate($("#id_date_range").val()) != false) {
+                $('input[name="download"]').attr('disabled', false);
+                $('#disabled-download-info').html("Download the data selected by clicking the button above.");
+                $("#disabled-download-info").removeClass("alert-warning").addClass("alert-success");
+            } else {
+                if ($("#id_variables").val() == false && $("#id_station_name").val() == false ) {
+                    $('#disabled-download-info').html("Select at least one station, one parameter and a valid time range.");
+                } else if ( $("#id_variables").val() == false ) {
+                    $('#disabled-download-info').html("You have not selected any variable.");
+                } else if ( $("#id_station_name").val() == false ) {
+                    $('#disabled-download-info').html("You have not selected any station.");
+                } else {
+                    $('#disabled-download-info').html("Invalid date format. It mus be YYYY-MM-DD HH:MM:ss - YYYY-MM-DD HH:MM:ss.");
+                };
+                $('input[name="download"]').attr('disabled', true);
+                $("#disabled-download-info").removeClass("alert-success").addClass("alert-warning");
+            };
+        };
+
+        $('#id_date_range').on('apply.daterangepicker cancel.daterangepicker', enableDownload);
+        $('input[name="date_range"').bind('change paste keyup', enableDownload);
+        $('select[name="variables"').bind('change paste keyup', enableDownload);
+        $('select[name="station_name"').bind('change paste keyup', enableDownload);
+        
+        $(document).ready(enableDownload);
+    </script>   
+
+    <!-- Mostramos el tutorial la primera vez que se entra al sitio (Se reinicia cada 60 dias) y cuando se haga click en el boton "Tutorial" -->
+    <script type="text/javascript">
+        var tutorialCookie = getCookie('tutorial')
+        if (tutorialCookie == 1) {
+            // pass
+        } else {
+            console.log('no cookie')
+            startTutorial();
+            createCookie('tutorial', 1, 60);
+        }
+        $("#button-id-tutorial").on('click', function() {
+            startTutorial();
+        });
+    </script>
+
+{% endblock %}
