@@ -28,13 +28,7 @@ SECRET_KEY = '9*0)1vlyf4ys3a@6nd^5ay1ih22e-+)fw2z=nqg@*$irbzc^az'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['81.34.16.199','192.168.100.129', 'climanevada.obsnev.es', 'localhost', '10.60.174.45','192.168.40.128']
-
-'''INTERNAL_IPS = (
-    '127.0.0.1',
-    '10.60.174.45',
-    '192.168.100.129',
-)'''
+ALLOWED_HOSTS = ['climanevada.obsnev.es', 'localhost']
 
 # Application definition
 
